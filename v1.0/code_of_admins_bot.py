@@ -1,356 +1,347 @@
-import logging
-from aiogram import Bot, Dispatcher, executor, types
-from aiogram.utils.helper import Helper, HelperMode, ListItem
-from aiogram.contrib.fsm_storage.memory import MemoryStorage
-from aiogram.contrib.middlewares.logging import LoggingMiddleware
-from aiogram.dispatcher import FSMContext
-from aiogram.dispatcher.filters.state import State, StatesGroup
 from pymongo import MongoClient
 import urllib.parse
+import requests
+import json
+import numpy as np
+from google.oauth2.credentials import Credentials
+from gcsa.google_calendar import GoogleCalendar
+from gcsa.recurrence import Recurrence, DAILY, SU, SA
+from datetime import datetime, timedelta
+from gcsa.conference import ConferenceSolutionCreateRequest, SolutionType
+from gcsa.reminders import EmailReminder, PopupReminder
+import random
+import sys
+import time
+from google.auth.transport.requests import Request
+
+from gcsa.event import Event
+from beautiful_date import *
+
+def do_log(text):
+    with open('log.txt','r') as file: 
+        log = file.read()
+    with open('log.txt','w') as file: 
+        file.write(log+'\n'+str(text)) 
+
 
 password = urllib.parse.quote_plus('7ZfrNV3ifnWf2oor')
 client = MongoClient('mongodb+srv://coolpoint:%s@coolpoint-cluster.5g2rs.mongodb.net/?retryWrites=true&w=majority' % (password))
-
 base = client['base_of_peoples']
 base_teachers = base['teachers']
 base_students = base['students']
 
-samples = {
-    'for_students' : '<Контактный номер, указанный в CRM (+79999999999)>\n<ФИО через пробел>\n<Username ученика в телеграм>\n<Username родителя (если надо)\n<Часовой пояс ученика по Москве, просто +чч (например, +2)>',
-    'for_teachers' : '<ФИО через пробел>\n<Токен доступа к Google API>\n<Часовой пояс (+чч)>\n<Любой контактный номер или ссылка на Telegram>'
-}
 
-access = ['VuplesOwl', 'A3artt']
-
-
-class States(StatesGroup):
-
-    STUDENT = State()
-    TEACHER = State()
-    CONFIRM_TEACHER = State()
-    CONFIRM_STUDENT = State()
-    SET_CHOICE_PUT_OR_GET = State()
-    GET_DATA = State()
-    CHANGE_DATA = State()
-    
-    
-    
-API_TOKEN = '5505602681:AAG4wWLE4GCTYxmSmoF3LHHC43fe41Leiak'
-
-logging.basicConfig(level=logging.INFO)
-
-bot = Bot(token=API_TOKEN)
-dp = Dispatcher(bot, storage=MemoryStorage())
-
-dp.middleware.setup(LoggingMiddleware())
+while True:
+    try:
+        uri = "https://api.yclients.com/api/v1/records/651183"
+        headers = {"Accept" : "application/vnd.yclients.v2+json","Content-Type" : "application/json","Authorization" : "Bearer uw2xhhghwja3kbkmadh4, User f774e3eb777a5244ccbe927cf8c6047f"}
+        params = {'start_date' :  str(datetime.today().day)+'.'+str(datetime.today().month)+'.'+str(datetime.today().year)}
 
 
-@dp.message_handler(commands='start')
-async def start_cmd_handler(msg: types.Message):
-    
-    if msg.from_user.username not in ['VuplesOwl', 'A3artt'] : return 
+        records_crm = json.loads(requests.get(uri, params=params, headers=headers).text)['data']
+        with open('records_file.txt','r') as text: 
+            data = data.read()
+            if data == '': records_file = {}
+            else: records_file = json.loads(data)
 
-    state = dp.current_state(user=msg.from_user.id)
+        for record in records_crm:
+            record_id = str(record['id'])
+            if records_file.get(record_id) == None:
+                print(record_id)
+                do_log(str(record_id))
+                if record['client'] == None: continue
+                number = '+'+str(record['client']['phone'])
+                crm_time_start = datetime.fromisoformat(record['date'])
+                seance_length = record['seance_length']
+                full_teachers_name = record['staff']['name']
+                notification_name = record['client']['name']
+                student_id = str(record['client']['id'])
+                if record['services']==None: continue
+                subject = record['services'][0]['title']
+                is_deleted = record['deleted']
+                crm_timezone = -2 # НЕ ЗАБЫТЬ УБРАТЬ
 
-    await state.reset_state()
-    
-    keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    buttons = ["Student", "Teacher"]
-    keyboard.add(*buttons)
+                uri = "https://api.yclients.com/api/v1/client/651183/"+student_id
+                headers = {"Accept" : "application/vnd.yclients.v2+json","Content-Type" : "application/json","Authorization" : "Bearer uw2xhhghwja3kbkmadh4, User f774e3eb777a5244ccbe927cf8c6047f"}
+                response = json.loads(requests.get(uri, headers=headers).text)
 
-    await msg.reply("Привет\nТебе нужно выбрать, чьи данные собираешься ввести или посмотреть, используй кнопки.\nЧтобы сбросить ввод напиши /cancel", reply_markup=keyboard)
+                grade = response['data']['categories'][0]['title']
 
+                uri = 'https://api.yclients.com/api/v1/loyalty/abonements/'
+                headers = {"Accept" : "application/vnd.yclients.v2+json","Content-Type" : "application/json","Authorization" : "Bearer uw2xhhghwja3kbkmadh4, User f774e3eb777a5244ccbe927cf8c6047f"}
+                params = {'company_id' : '651183','phone' : number}
+                response = json.loads(requests.get(uri, params=params,headers=headers).text)['data']
 
+                if  response == []:
+                    is_balance = False
+                    balance = None
+                else:
+                    is_balance = True 
+                    balance = response[0]['united_balance_services_count']
 
-@dp.message_handler()
-async def handler(msg: types.Message):
-    
-    if msg.from_user.username not in ['VuplesOwl', 'A3artt'] : return 
+                item_student = base_students.find({'_id':number})
+                item_teacher = base_teachers.find({'_id':full_teachers_name})
+                for item in item_student:
+                    students_name = item['full_name'].split(' ')[1]
+                    students_time_zone = item['time_zone']
 
-    
-    state = dp.current_state(user=msg.from_user.id)
-    
-    keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    buttons = ["Put new data","Get data","/cancel"]
-    keyboard.add(*buttons)
-    
-    if msg.text.lower() != 'student' and msg.text.lower() != 'teacher':
-        await bot.send_message(msg.from_user.id, 'Не понимаю, используй кнопки')
-        
-    elif msg.text.lower() == 'student':
-        await bot.send_message(msg.from_user.id, 'Выбери, что хочешь сделать:', reply_markup=keyboard)
-        # await bot.send_message(msg.from_user.id, 'Введи данные ученика по шаблону через перенос строки:\n'+samples['for_students'], reply_markup=keyboard)
-        await States.SET_CHOICE_PUT_OR_GET.set()
-        await state.update_data(choised_obj='student')
-        
-    elif msg.text.lower() == 'teacher': 
-        await bot.send_message(msg.from_user.id, 'Выбери, что хочешь сделать:', reply_markup=keyboard)
-        # await bot.send_message(msg.from_user.id, 'Введи данные учителя по шаблону через перенос строки:\n'+samples['for_teachers'], reply_markup=keyboard)
-        await States.SET_CHOICE_PUT_OR_GET.set()
-        await state.update_data(choised_obj='teacher')
-        
+                for item in item_teacher:
+                    token = json.loads(item['token'])
+                    teachers_time_zone = item['time_zone']
 
-@dp.message_handler(state=States.SET_CHOICE_PUT_OR_GET)
-async def get_info_student(msg: types.Message):
-    state = dp.current_state(user=msg.from_user.id)
-    if msg.text=='/cancel': 
-        await state.finish()
-        
-        keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
-        buttons = ["Student", "Teacher"]
-        keyboard.add(*buttons)
-        
-        await msg.reply("Ввод сброшен, можешь снова выбрать, чьи данные нужно ввести или посмотреть", reply_markup=keyboard)
-        return
-    
-    data = await state.get_data()
-    choise = data['choised_obj']
-    
-    keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    buttons = ["/cancel"]
-    keyboard.add(*buttons)
-    
-    if msg.text.lower() != 'put new data' and msg.text.lower() != 'get data':
-        await bot.send_message(msg.from_user.id, 'Не понимаю, используй кнопки')
-        
-    elif msg.text.lower() == 'put new data':
-        if choise == 'teacher':
-            await States.TEACHER.set()
-            await bot.send_message(msg.from_user.id, 'Введи данные учителя по шаблону через перенос строки:\n'+samples['for_teachers'], reply_markup=keyboard)
-        elif choise == 'student':
-            await States.STUDENT.set()
-            await bot.send_message(msg.from_user.id, 'Введи данные ученика по шаблону через перенос строки:\n'+samples['for_students'], reply_markup=keyboard)
-            
-    elif msg.text.lower() == 'get data':
-        await States.GET_DATA.set()
-        if choise == 'teacher':
-            await States.GET_DATA.set()
-            await bot.send_message(msg.from_user.id, 'Введи ФИО учителя', reply_markup=keyboard)
-        elif choise == 'student':
-            await States.GET_DATA.set()
-            await bot.send_message(msg.from_user.id, 'Введи номер ученика из CRM (+79999999999)', reply_markup=keyboard)
-            
-@dp.message_handler(state=States.GET_DATA)
-async def get_info_student(msg: types.Message):
-    state = dp.current_state(user=msg.from_user.id)
-    if msg.text=='/cancel': 
-        await state.finish()
-        
-        keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
-        buttons = ["Student", "Teacher"]
-        keyboard.add(*buttons)
-        
-        await msg.reply("Ввод сброшен, можешь снова выбрать, чьи данные нужно ввести", reply_markup=keyboard)
-        return
-    
-    keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    buttons = ["/cancel"]
-    keyboard.add(*buttons)
+                teachers_time_start = crm_time_start + timedelta(hours=int(teachers_time_zone)+crm_timezone)
+                teachers_time_end = teachers_time_start + timedelta(seconds = seance_length)
 
-    data = await state.get_data()
-    choise = data['choised_obj']
-    
-    _id = msg.text
-    
-    if choise == 'teacher':
-        # States.GET_DATA.set()
-        # await bot.send_message(msg.from_user.id, 'Введи ФИО учителя', reply_markup=keyboard)
-        base = base_teachers.find({'_id':_id})
-        is_id = False
-        for item in base:
-            is_id = True
-            await bot.send_message(msg.from_user.id, str(item)+'\n ---------- \n Если нужно что-то изменить, то введи название парfметра и через ":" его значение (number:+799999999), если нужно ввести новые значения, то просто сделай то же самое, если их несколько, то через enter', reply_markup=keyboard)
-            await States.CHANGE_DATA.set()
-            await state.update_data(item=item)
-            
-        if is_id == False:
-            await bot.send_message(msg.from_user.id, 'Кажется ты ввел неверные данные или такого человека еще нет в базе данных, нажми /cancel или попробуй еще раз', reply_markup=keyboard)
-            await States.GET_DATA.set()
+                students_time_start = crm_time_start + timedelta(hours=int(students_time_zone)+crm_timezone)
+                students_time_end = students_time_start + timedelta(seconds = seance_length)
+
+                students_time_first_notice = students_time_start - timedelta(hours=6)
+                students_time_second_notice = students_time_start + timedelta(seconds = seance_length)
+
+                credentials = Credentials(
+                    token=token['token'],
+                    refresh_token=token['refresh_token'],
+                    client_id=token['client_id'],
+                    client_secret=token['client_secret'],
+                    scopes=token['scopes'],
+                    token_uri=token['token_uri'],
+                    expiry=token['expiry']
+                )
+                # print((datetime.now().date() - datetime.strptime(credentials.expiry, '%Y-%m-%dT%H:%M:%S.%fZ').date()).days)
                 
-    elif choise == 'student':
-        base = base_students.find({'_id':_id})
-        is_id = False
-        for item in base:
-            is_id = True
-            await bot.send_message(msg.from_user.id, str(item)+'\n ---------- \n Если нужно что-то изменить, то введи название парfметра и через ":"" его значение (number:+799999999), если нужно ввести новые значения, то просто сделай то же самое, если их несколько, то через enter', reply_markup=keyboard)
-            await States.CHANGE_DATA.set()
-            await state.update_data(item=item)
-            
-        if is_id == False:
-            await bot.send_message(msg.from_user.id, 'Кажется ты ввел неверные данные или такого человека еще нет в базе данных, нажми /cancel или попробуй еще раз', reply_markup=keyboard)
-            await States.GET_DATA.set()
-            
+                credentials.refresh(Request())
+                base_teachers.update_one({"_id": full_teachers_name}, 
+                                                 {"$set": {'token': credentials.to_json()}})
 
-@dp.message_handler(state=States.CHANGE_DATA)
-async def get_info_student(msg: types.Message):
-    state = dp.current_state(user=msg.from_user.id)
-    if msg.text=='/cancel': 
-        await state.finish()
-        
-        keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
-        buttons = ["Student", "Teacher"]
-        keyboard.add(*buttons)
-        
-        await msg.reply("Ввод сброшен, можешь снова выбрать, чьи данные нужно ввести или показать", reply_markup=keyboard)
-        return
-    keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    buttons = ["Student", "Teacher"]
-    keyboard.add(*buttons)
-    
-    changed_items = msg.text
-    
-    data = await state.get_data()
-    choise = data['choised_obj']
-    item = data['item']
+                gc = GoogleCalendar(credentials=credentials)
 
-    if choise == 'teacher':
-        for key_item in changed_items.split('\n'):
-            key = key_item.split(':')[0]
-            if key=='token':
-                value = key_item[6:]
-            else: value = key_item.split(':')[1]
+                event = Event(summary=students_name+' || '+grade+' || '+subject,
+                            start=teachers_time_start,
+                            end=teachers_time_end,
+                            reminders=PopupReminder(minutes_before_start=25),
+                            conference_solution=ConferenceSolutionCreateRequest(solution_type=SolutionType.HANGOUTS_MEET),
+                            color_id=7,
+                            event_id = random.randint(10000000,19999999))
 
-            base_teachers.update_one({"_id": item['_id']}, 
-                                             {"$set": {key: value}})
-            
-            
-        
-        
-    elif choise == 'student':
-        for key_item in changed_items.split('\n'):
-            key = key_item.split(':')[0]
-            value = key_item.split(':')[1]
+                gc.add_event(event)
+                event_id = event.event_id
 
-            base_students.update_one({"_id": item['_id']}, 
-                                             {"$set": {key: value}})
-            
-    await bot.send_message(msg.from_user.id, 'Данные обновлены, можешь снова выбрать, чьи данные нужно ввести или показать', reply_markup=keyboard)
+                event = gc.get_event(event_id)
+                conference_id = event.conference_solution.conference_id
 
-    await state.finish()
+                with open('is_in_file.txt','r') as data: 
+                    is_in_file = json.loads(data.read())
 
+                try:
+                    user_id = list(is_in_file.keys())[list(is_in_file.values()).index(number)]
+                    print('is_real_user')
+                except:
+                    user_id = str(676352317)
+
+                data = {
+                    'crm_time_start' : crm_time_start.isoformat(),
+                    'creation_date' : datetime.now().date().isoformat(),
+                    'teachers_time_zone': teachers_time_zone,
+                    'students_time_zone': students_time_zone,
+                    'full_teachers_name': full_teachers_name,
+                    'crm_timezone' : crm_timezone,
+                    'seance_length' : seance_length,
+                    'is_deleted' : is_deleted,
+                    'is_balance' : is_balance,
+                    'balance' : balance,
+                    'number' : number,
+                    'subject' : subject,
+                    'notification_name' : notification_name,
+                    'event_id' : event_id,
+                    'token':token,
+                    # 'user_id': str(676352317),
+                    'meeting_link' : 'https://meet.google.com/'+conference_id
+                    'user_id':user_id
+                }
+
+                records_file.update({record_id:data}) 
+
+                with open('records_file.txt','w') as file: 
+                    file.write(json.dumps(records_file))
+            else:
+                record_file = records_file[record_id]
+                if record_file['is_deleted']: continue
+                file_time_start = datetime.fromisoformat(record_file['crm_time_start'])
+                file_seance_length = record_file['seance_length']
+                file_is_deleted = record_file['is_deleted']
+                event_id = record_file['event_id']
+                token = record_file['token']
+                file_is_balance = record_file['is_balance']
+                file_balance = record_file['balance']
+                number = record_file['number']
+                notification_name = record_file['notification_name']
+                full_teachers_name = record_file['full_teachers_name']
+                user_id = record_file['user_id']
+                
+
+                uri = 'https://api.yclients.com/api/v1/loyalty/abonements/'
+                headers = {"Accept" : "application/vnd.yclients.v2+json","Content-Type" : "application/json","Authorization" : "Bearer uw2xhhghwja3kbkmadh4, User f774e3eb777a5244ccbe927cf8c6047f"}
+                params = {'company_id' : '651183','phone' : number}
+                response = json.loads(requests.get(uri, params=params,headers=headers).text)['data']
+
+                if response == []:
+                    crm_is_balance = False
+                    crm_balance = None
+                else:
+                    crm_is_balance = True 
+                    crm_balance = response[0]['united_balance_services_count']
+                    
+                with open('is_in_file.txt','r') as data: 
+                    is_in_file = json.loads(data.read())
+                try:
+                    new_user_id = list(is_in_file.keys())[list(is_in_file.values()).index(number)]
+                except:
+                    new_user_id = str(676352317)
+                changed_user_id = new_user_id != user_id
+                
+                if changed_user_id:
+                    print('CHENGED USER_ID: ', record_id)
+                    do_log('CHENGED USER_ID: '+str(record_id))
+                    record_file['user_id'] = new_user_id
+                    records_file.update({record_id:record_file}) 
+
+                    with open('records_file.txt','w') as file: 
+                        file.write(json.dumps(records_file))
+
+
+
+                crm_time_start = datetime.fromisoformat(record['date'])
+                crm_seance_length = record['seance_length']
+                crm_is_deleted = record['deleted']
+
+                teachers_time_zone = record_file['teachers_time_zone']
+                students_time_zone = record_file['students_time_zone']
+                crm_timezone = record_file['crm_timezone']
+
+                changed_start_time = crm_time_start != file_time_start
+                changed_seance_length = crm_seance_length != file_seance_length
+                changed_is_balance = file_is_balance != crm_is_balance
+                changed_balance = file_balance != crm_balance
+                
+
+
+                if changed_start_time or changed_seance_length:
+                    print('CHENGED TIME: ', record_id)
+                    do_log('CHENGED TIME: '+str(record_id))
+                    teachers_time_start = crm_time_start + timedelta(hours=int(teachers_time_zone)+crm_timezone)
+                    teachers_time_end = teachers_time_start + timedelta(seconds = crm_seance_length)
+
+                    students_time_start = crm_time_start + timedelta(hours=int(students_time_zone)+crm_timezone)
+                    students_time_end = students_time_start + timedelta(seconds = crm_seance_length)
+
+                    # print(record_id,' ', crm_time_start, ' ', file_time_start)
+                    credentials = Credentials(
+                        token=token['token'],
+                        refresh_token=token['refresh_token'],
+                        client_id=token['client_id'],
+                        client_secret=token['client_secret'],
+                        scopes=token['scopes'],
+                        token_uri=token['token_uri']
+                    )
+                    credentials.refresh(Request())
+#                     
+                    base_teachers.update_one({"_id": full_teachers_name}, 
+                                                     {"$set": {'token': credentials.to_json()}})
+                    
+                    
+                    gc = GoogleCalendar(credentials=credentials)
+
+                    event = gc.get_event(event_id)
+                    event.start = teachers_time_start
+                    event.end = teachers_time_end
+                    gc.update_event(event)
+
+                    record_file['crm_time_start'] = crm_time_start.isoformat()
+                    record_file['seance_length'] = crm_seance_length
+
+                    records_file.update({record_id:record_file}) 
+
+                    with open('records_file.txt','w') as file: 
+                        file.write(json.dumps(records_file))
+
+                if changed_is_balance or changed_balance:
+                    record_file['is_balance'] = crm_is_balance
+                    record_file['balance'] = crm_balance
+                    
+                    print('CHENGED BALANCE: ', record_id)
+                    do_log('CHENGED BALANCE: '+str(record_id))
+                    
+                    records_file.update({record_id:record_file}) 
+
+                    with open('records_file.txt','w') as file: 
+                        file.write(json.dumps(records_file))
+
+
+        record_ids = []
+        for record in records_crm:
+            record_ids.append(str(record['id']))
+
+        ids_missing_records = []
+        for file_record_id in records_file:
+            if file_record_id not in record_ids:
+                ids_missing_records.append(file_record_id)
+        for id_missing_record in ids_missing_records:
+            file_record = records_file[id_missing_record]
+            if file_record['is_deleted']: continue
+
+            creation_date = datetime.fromisoformat(file_record['creation_date'])
+            if creation_date.date() < datetime.now().date():
+                print('YESTERDAY: ',id_missing_record)
+                do_log('YESTERDAY: '+str(id_missing_record))
+                
+                records_file.pop(id_missing_record) 
+                with open('records_file.txt','w') as file: 
+                    file.write(json.dumps(records_file))
+                    continue
+            else:
+                token = file_record['token']
+                event_id =file_record['event_id']
+                print('DELETED: ',id_missing_record)
+                full_teachers_name = file_record['full_teachers_name']
+                
+                do_log('DELETED: '+str(id_missing_record))
+                
+                credentials = Credentials(
+                    token=token['token'],
+                    refresh_token=token['refresh_token'],
+                    client_id=token['client_id'],
+                    client_secret=token['client_secret'],
+                    scopes=token['scopes'],
+                    token_uri=token['token_uri']
+                )
+                credentials.refresh(Request())
+                base_teachers.update_one({"_id": full_teachers_name}, 
+                                                 {"$set": {'token': credentials.to_json()}})
+        
+                gc = GoogleCalendar(credentials=credentials)
+
+                event = gc.get_event(event_id)
+                event.summary = '(ОТМЕНЕН) '+event.summary
+                event.color_id = 8
+                gc.update_event(event)
+
+                file_record['is_deleted'] = True
+
+                records_file.update({id_missing_record:file_record}) 
+                with open('records_file.txt','w') as file: 
+                    file.write(json.dumps(records_file))    
+
+
+        # print('cycle_end')
+        time.sleep(60)
+#     except Exception as e:
+#         do_log('ERRORE: '+str(e))
+        
+        
     
 
-@dp.message_handler(state=States.STUDENT)
-async def get_info_student(msg: types.Message):
-    state = dp.current_state(user=msg.from_user.id)
-    if msg.text=='/cancel': 
-        await state.finish()
         
-        keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
-        buttons = ["Student", "Teacher"]
-        keyboard.add(*buttons)
         
-        await msg.reply("Ввод сброшен, можешь снова выбрать, чьи данные нужно ввести или показатm", reply_markup=keyboard)
-        return
-
-    number = msg.text.split('\n')[0]
-    full_name = msg.text.split('\n')[1]
-    username = msg.text.split('\n')[2]
-    parents_username = msg.text.split('\n')[3]
-    time_zone = msg.text.split('\n')[4]
-    
-    await state.update_data(number=number,full_name=full_name,username=username,parents_username=parents_username,time_zone=time_zone)
-    
-    keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    buttons = ["Да","/cancel"]
-    keyboard.add(*buttons)
-
-    await bot.send_message(msg.from_user.id, 'Все верно?\n{}\n{}\n{}\n{}\n{}'.format(number,full_name,username,parents_username,time_zone), reply_markup=keyboard)
-    
-    await States.CONFIRM_STUDENT.set()
-    
-    
-    
-    
-    
-    
-    
-@dp.message_handler(state=States.TEACHER)
-async def get_info_teacher(msg: types.Message):
-    state = dp.current_state(user=msg.from_user.id)
-    if msg.text=='/cancel': 
-        await state.finish()
         
-        keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
-        buttons = ["Student", "Teacher"]
-        keyboard.add(*buttons)
         
-        await msg.reply("Ввод сброшен, можешь снова выбрать, чьи данные нужно ввести или показатm", reply_markup=keyboard)
-        return
-
-    full_name = msg.text.split('\n')[0]
-    token = msg.text.split('\n')[1]
-    time_zone = msg.text.split('\n')[2]
-    number = msg.text.split('\n')[3]
-    
-    await state.update_data(full_name=full_name,token=token,time_zone=time_zone,number=number)
-    
-    keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    buttons = ["Да","/cancel"]
-    keyboard.add(*buttons)
-    
-    await bot.send_message(msg.from_user.id, 'Все верно?\n{}\n{}\n{}\n{}'.format(full_name,token,time_zone,number), reply_markup=keyboard)
-    
-    await States.CONFIRM_TEACHER.set()
         
-
-@dp.message_handler(state=States.CONFIRM_STUDENT)
-async def get_info_teacher(msg: types.Message):
-    state = dp.current_state(user=msg.from_user.id)
-    keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    buttons = ["Student", "Teacher"]
-    keyboard.add(*buttons)
-    if msg.text=='/cancel': 
-        await state.finish()
-        await msg.reply("Ввод сброшен, можешь снова выбрать, чьи данные нужно ввести или показатm", reply_markup=keyboard)
-        return
-    
-    if msg.text.lower()=='да':
-        data = await state.get_data()
-        
-        mydict = {
-        "_id" : data['number'],
-        "full_name" : data['full_name'],
-        "username" : data['username'],
-        "parents_username" : data['parents_username'],
-        "time_zone" : data['time_zone']
-        }
-
-        base_students.insert_one(mydict)
-        
-        await bot.send_message(msg.from_user.id, 'Данные ученика занесены в систему\nЕсли они окажутся неверными и система сломается, я вас найду и разберусь лично', reply_markup=keyboard)
-        await state.finish()
-    else:
-        await bot.send_message(msg.from_user.id, 'Напиши Да или нажми команду /cancel')
-        
-@dp.message_handler(state=States.CONFIRM_TEACHER)
-async def get_info_teacher(msg: types.Message):
-    state = dp.current_state(user=msg.from_user.id)
-    keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    buttons = ["Student", "Teacher"]
-    keyboard.add(*buttons)
-    if msg.text=='/cancel': 
-        await state.finish()
-        await msg.reply("Ввод сброшен, можешь снова выбрать, чьи данные нужно ввести или показатm", reply_markup=keyboard)
-        return
-    
-    if msg.text.lower()=='да':
-        data = await state.get_data()
-        
-        mydict = {
-        "_id" : data['full_name'],
-        "token" : data['token'],
-        "time_zone" : data['time_zone'],
-        "number" : data['number']
-        }
-
-        base_teachers.insert_one(mydict)
-        
-        await bot.send_message(msg.from_user.id, 'Данные преподавателя занесены в систему\nЕсли они окажутся неверными и система сломается, я вас найду и разберусь лично', reply_markup=keyboard)
-        await state.finish()
-    else:
-        await bot.send_message(msg.from_user.id, 'Напиши Да или нажми команду /cancel')
-        
-
-if __name__ == '__main__':
-    executor.start_polling(dp, skip_updates=True)
