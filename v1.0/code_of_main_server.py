@@ -40,7 +40,8 @@ while True:
 
         records_crm = json.loads(requests.get(uri, params=params, headers=headers).text)['data']
         with open('records_file.txt','r') as text: 
-            records_file = json.loads(text.read())
+            if text.read() == '': records_file = {}
+            else: records_file = json.loads(text.read())
 
         for record in records_crm:
             record_id = str(record['id'])
