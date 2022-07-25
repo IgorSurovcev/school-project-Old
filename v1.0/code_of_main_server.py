@@ -175,6 +175,7 @@ while True:
                 number = record_file['number']
                 notification_name = record_file['notification_name']
                 full_teachers_name = record_file['full_teachers_name']
+                user_id = record_file['user_id']
                 
 
                 uri = 'https://api.yclients.com/api/v1/loyalty/abonements/'
@@ -188,6 +189,23 @@ while True:
                 else:
                     crm_is_balance = True 
                     crm_balance = response[0]['united_balance_services_count']
+                    
+                with open('is_in_file.txt','r') as data: 
+                    is_in_file = json.loads(data.read())
+                try:
+                    new_user_id = list(is_in_file.keys())[list(is_in_file.values()).index(number)]
+                except:
+                    new_user_id = str(676352317)
+                changed_user_id = new_user_id != user_id
+                
+                if changed_user_id:
+                    print('CHENGED USER_ID: ', record_id)
+                    do_log('CHENGED USER_ID: '+str(record_id))
+                    record_file['user_id'] = new_user_id
+                    records_file.update({record_id:record_file}) 
+
+                    with open('records_file.txt','w') as file: 
+                        file.write(json.dumps(records_file))
 
 
 
@@ -203,6 +221,7 @@ while True:
                 changed_seance_length = crm_seance_length != file_seance_length
                 changed_is_balance = file_is_balance != crm_is_balance
                 changed_balance = file_balance != crm_balance
+                
 
 
                 if changed_start_time or changed_seance_length:
