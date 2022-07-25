@@ -24,7 +24,7 @@ blanks = {
 
 
     
-API_TOKEN = '5504384147:AAFRfM4v1cxShj30PIdqFrgZM_0aAHhSY2c'
+API_TOKEN = '5473320366:AAEwnENs-cyjGA5pBJFA-qpeHiU-v4B2_5A'
 
 logging.basicConfig(level=logging.INFO)
 
@@ -39,9 +39,9 @@ async def start_handler(msg: types.Message):
 
     user_id = msg.from_user.id
     username = '@'+msg.from_user.username
-    print(username)
     
     print(user_id)
+    print(username)
     
     item_student = base_students.find({'username':username})
     
