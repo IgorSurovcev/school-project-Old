@@ -4,7 +4,7 @@ import urllib.parse
 import requests
 import json
 import numpy as np
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import random
 import sys
 import time
@@ -18,7 +18,7 @@ import asyncio
 import json
 import pytz
 
-bot_token = '5504384147:AAFRfM4v1cxShj30PIdqFrgZM_0aAHhSY2c'
+bot_token = '5473320366:AAEwnENs-cyjGA5pBJFA-qpeHiU-v4B2_5A'
 
 def send_first_notice(user_id,bot_message):
     url = "https://api.telegram.org/bot"+bot_token+"/sendphoto"
@@ -26,14 +26,14 @@ def send_first_notice(user_id,bot_message):
         "chat_id": user_id,
         'caption' : bot_message,
         'parse_mode':'Markdown'}
-    with open('Фон для уведомления.png', "rb") as image_file:
+    with open('image.png', "rb") as image_file:
         requests.post(url,data=data,files={"photo": image_file})
         
     data = {
         "chat_id": str(676352317),
         'caption' : bot_message,
         'parse_mode':'Markdown'}
-    with open('Фон для уведомления.png', "rb") as image_file:
+    with open('image.png', "rb") as image_file:
         requests.post(url,data=data,files={"photo": image_file})
         
 
@@ -71,8 +71,9 @@ dp = Dispatcher(bot)
 while True:
     
     with open('records_file.txt','r') as data: 
-        if data.read() == '': records_file = {}
-        else: records_file = json.loads(data.read())
+        text = data.read()
+        if text == '': records_file = {}
+        else: records_file = json.loads(text)
 
     for record_id in records_file:
         record = records_file[record_id]
@@ -91,8 +92,10 @@ while True:
         crm_time_zone = -2 # НЕ ЗАБЫТЬ УБРАТЬ
 
         user_id = record['user_id']
+        
 
-        # now = datetime.now() + timedelta(hours=int(students_time_zone)-crm_time_zone)
+        # now = datetime.now() + timedelta(hours=int(students_time_zone)+crm_time_zone)
+        
         now = datetime.now() + timedelta(hours=int(students_time_zone))
         # now = datetime.now(pytz.timezone('Europe/Moscow')) + timedelta(hours=int(students_time_zone))
 
@@ -113,6 +116,10 @@ while True:
             delta = now - time_first_notice 
             seconds =  -(delta.seconds)
             microseconds = -(delta.microseconds)
+            
+         
+            
+        
         
         days = delta.days
 
@@ -144,14 +151,19 @@ while True:
 
         #SECOND
         if is_balance:
-            delta = time_second_notice - now
-            days = delta.days
-            seconds =  delta.seconds
-            microseconds = delta.microseconds
+            if time_second_notice > now:
+                delta = time_second_notice - now
+                seconds =  delta.seconds
+                microseconds = delta.microseconds
+            else: 
+                delta = now - time_second_notice 
+                seconds =  -(delta.seconds)
+                microseconds = -(delta.microseconds)
+
             for i in range(len(str(microseconds))): microseconds *= 0.1
             seconds += microseconds
             
-            if days == 0: print("SECOND ",seconds, record_id)
+            if days == 0: print("SECOND ",seconds, record_id, is_balance, balance)
 
             if days == 0 and 30 >= seconds > -30:
             # if days == 0:
