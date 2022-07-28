@@ -6,13 +6,15 @@ import numpy as np
 from google.oauth2.credentials import Credentials
 from gcsa.google_calendar import GoogleCalendar
 from gcsa.recurrence import Recurrence, DAILY, SU, SA
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from gcsa.conference import ConferenceSolutionCreateRequest, SolutionType
 from gcsa.reminders import EmailReminder, PopupReminder
 import random
 import sys
 import time
 from google.auth.transport.requests import Request
+import pytz
+
 
 from gcsa.event import Event
 from beautiful_date import *
@@ -40,8 +42,9 @@ while True:
 
         records_crm = json.loads(requests.get(uri, params=params, headers=headers).text)['data']
         with open('records_file.txt','r') as text: 
-            if text.read() == '': records_file = {}
-            else: records_file = json.loads(text.read())
+            data = text.read()
+            if data == '': records_file = {}
+            else: records_file = json.loads(data)
 
         for record in records_crm:
             record_id = str(record['id'])
@@ -51,6 +54,7 @@ while True:
                 if record['client'] == None: continue
                 number = '+'+str(record['client']['phone'])
                 crm_time_start = datetime.fromisoformat(record['date'])
+                print(crm_time_start)
                 seance_length = record['seance_length']
                 full_teachers_name = record['staff']['name']
                 notification_name = record['client']['name']
@@ -80,7 +84,9 @@ while True:
 
                 item_student = base_students.find({'_id':number})
                 item_teacher = base_teachers.find({'_id':full_teachers_name})
+                is_student = False
                 for item in item_student:
+                    is_student = True
                     students_name = item['full_name'].split(' ')[1]
                     students_time_zone = item['time_zone']
 
@@ -88,6 +94,10 @@ while True:
                     token = json.loads(item['token'])
                     teachers_time_zone = item['time_zone']
 
+                if is_student == False: 
+                    print('not_such_student_in_db')
+                    continue
+                
                 teachers_time_start = crm_time_start + timedelta(hours=int(teachers_time_zone)+crm_timezone)
                 teachers_time_end = teachers_time_start + timedelta(seconds = seance_length)
 
@@ -153,8 +163,7 @@ while True:
                     'notification_name' : notification_name,
                     'event_id' : event_id,
                     'token':token,
-                    # 'user_id': str(676352317),
-                    'meeting_link' : 'https://meet.google.com/'+conference_id
+                    'meeting_link' : 'https://meet.google.com/'+conference_id,
                     'user_id':user_id
                 }
 
@@ -240,7 +249,9 @@ while True:
                         client_id=token['client_id'],
                         client_secret=token['client_secret'],
                         scopes=token['scopes'],
-                        token_uri=token['token_uri']
+                        token_uri=token['token_uri'],
+                        expiry=token['expiry']
+                        
                     )
                     credentials.refresh(Request())
 #                     
@@ -311,7 +322,8 @@ while True:
                     client_id=token['client_id'],
                     client_secret=token['client_secret'],
                     scopes=token['scopes'],
-                    token_uri=token['token_uri']
+                    token_uri=token['token_uri'],
+                    expiry=token['expiry']
                 )
                 credentials.refresh(Request())
                 base_teachers.update_one({"_id": full_teachers_name}, 
@@ -333,14 +345,5 @@ while True:
 
         # print('cycle_end')
         time.sleep(60)
-#     except Exception as e:
-#         do_log('ERRORE: '+str(e))
-        
-        
-    
-
-        
-        
-        
-        
-        
+    except Exception as e:
+         do_log('ERRORE: '+str(e))
