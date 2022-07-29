@@ -49,12 +49,11 @@ while True:
         for record in records_crm:
             record_id = str(record['id'])
             if records_file.get(record_id) == None:
-                print(record_id)
-                do_log(str(record_id))
                 if record['client'] == None: continue
                 number = '+'+str(record['client']['phone'])
                 crm_time_start = datetime.fromisoformat(record['date'])
-                print(crm_time_start)
+                print(record_id,crm_time_start,record['date'])
+                do_log(str(record_id)+' '+str(crm_time_start))
                 seance_length = record['seance_length']
                 full_teachers_name = record['staff']['name']
                 notification_name = record['client']['name']
@@ -92,7 +91,7 @@ while True:
 
                 for item in item_teacher:
                     token = json.loads(item['token'])
-                    teachers_time_zone = item['time_zone']
+                    teachers_time_zone = int(item['time_zone'])
 
                 if is_student == False: 
                     print('not_such_student_in_db')
@@ -127,6 +126,7 @@ while True:
                 event = Event(summary=students_name+' || '+grade+' || '+subject,
                             start=teachers_time_start,
                             end=teachers_time_end,
+                            timezone = 'Etc/GMT{}'.format(-3-teachers_time_zone),
                             reminders=PopupReminder(minutes_before_start=25),
                             conference_solution=ConferenceSolutionCreateRequest(solution_type=SolutionType.HANGOUTS_MEET),
                             color_id=7,
@@ -185,6 +185,7 @@ while True:
                 notification_name = record_file['notification_name']
                 full_teachers_name = record_file['full_teachers_name']
                 user_id = record_file['user_id']
+                
                 
 
                 uri = 'https://api.yclients.com/api/v1/loyalty/abonements/'
