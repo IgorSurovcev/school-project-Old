@@ -83,10 +83,10 @@ async def start_handler(msg: types.Message):
         for user_id_file in is_in_file[number]:
             if user_id == user_id_file: numbers.append(number)
         
-    if numbers == [] and deleted_user_ids[user_id]==None:
+    if numbers == [] and deleted_user_ids.get(user_id) == None:
         await bot.send_message(user_id,blanks['not_username_in_base'])
         return
-    elif numbers == [] and deleted_user_ids[user_id]!=None:
+    elif numbers == [] and deleted_user_ids.get(user_id)!=None:
         for deleted_number in deleted_user_ids[user_id]:
             is_in_file[deleted_number].append(user_id)
             deleted_user_ids.update({user_id:[]})
