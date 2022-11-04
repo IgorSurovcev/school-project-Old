@@ -1,1 +1,0 @@
-{"465876176": {"client_id": 133825167, "abonement_id": 22352808, "amount": 10}, "465461721": {"client_id": 133825167, "abonement_id": 22352808, "amount": 100}, "468255654": {"client_id": 133825167, "abonement_id": 22352808, "amount": 10}}
