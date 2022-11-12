@@ -12,13 +12,20 @@ from aiogram.dispatcher.filters.state import State, StatesGroup
 import json
 import traceback
         
-from logdna import LogDNAHandler
-key='d7903ac4bec957d8e8d0ab45479fdd45'
-log = logging.getLogger('logdna')
-options = {  'hostname': 'hostkey17726',  'ip': '46.17.100.162',  'mac': '56:6f:ff:5b:01:24'}
-options['index_meta'] = True
-mezmo = LogDNAHandler(key, options)
-log.addHandler(mezmo)
+# from logdna import LogDNAHandler
+# key='d7903ac4bec957d8e8d0ab45479fdd45'
+# log = logging.getLogger('logdna')
+# options = {  'hostname': 'hostkey17726',  'ip': '46.17.100.162',  'mac': '56:6f:ff:5b:01:24'}
+# options['index_meta'] = True
+# mezmo = LogDNAHandler(key, options)
+# log.addHandler(mezmo)
+
+def do_log(msg,level):
+    url = "https://logs.logdna.com/logs/ingest"
+    headers = {"Content-Type": "application/json","apikey": "d7903ac4bec957d8e8d0ab45479fdd45"}
+    querystring = {"hostname":"hostkey17726","mac":"56:6f:ff:5b:01:24","ip":"46.17.100.162","now":time.time()}
+    payload = {"lines": [{"timestamp": time.time(),"line": msg,"app": "Notice_server","level": level}]}
+    response = requests.request("POST", url, headers=headers, params=querystring, data=json.dumps(payload))
         
 def do_linkpay(record_id):
     uri = f'https://api.yclients.com/api/v1/record/651183/{record_id}'
@@ -108,13 +115,6 @@ blanks = {
     
     'notice_1_internally_not_balance_parents' : '*Уведомление*\nДобрый день! 😊\nСегодня у ученика ({}) в {} запланировано занятие по предмету {}.\n-------------------\nУрок все еще не оплачен. Оплатите по ссылке: {}\nЛибо приобретите абонемент (рекомендуется)'
 }
-    
-API_TOKEN = '5504384147:AAFRfM4v1cxShj30PIdqFrgZM_0aAHhSY2c'
-
-logging.basicConfig(level=logging.INFO)
-
-bot = Bot(token=API_TOKEN)
-dp = Dispatcher(bot)
 
 
 while True:
@@ -227,7 +227,7 @@ while True:
                             else:                    
                                 send_first_notice(user_id,blanks['notice_1_internally'].format(beautiful_time,subject))
                     except:
-                        log.exception('Notice server')
+                        do_log(traceback.format_exc(),'ERRORE')
                 else:
                     try:
                         print("FIRST ",seconds, record_id, is_balance, balance, beautiful_time)
@@ -252,7 +252,7 @@ while True:
                             else:                        
                                 send_first_notice(user_id,blanks['notice_1_internally_parents'].format(students_name,beautiful_time,subject))
                     except:
-                        log.exception('Notice server')
+                        do_log(traceback.format_exc(),'ERRORE')
 
         #SECOND
         if balance != None:
@@ -280,16 +280,17 @@ while True:
                             print("SECOND ",seconds, record_id, is_balance, balance, beautiful_time)
                             send_second_notice(user_id,blanks['notice_2'].format(subject,balance))
                         except:
-                            log.exception('Notice server')
+                            do_log(traceback.format_exc(),'ERRORE')
                     else:
                         try:
                             print("SECOND ",seconds, record_id, is_balance, balance, beautiful_time)
                             send_second_notice(user_id,blanks['notice_2_parents'].format(students_name,subject,balance))
                         except:
-                            log.exception('Notice server')
+                            do_log(traceback.format_exc(),'ERRORE')
                         
         # print("One time:",time.process_time()-time_start_2) 
     
     # print("All time:",time.process_time()-time_start) 
     time.sleep(60)
+
 

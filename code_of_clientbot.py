@@ -57,9 +57,9 @@ categories = {
 }
 
     
-# API_TOKEN = '5473320366:AAEwnENs-cyjGA5pBJFA-qpeHiU-v4B2_5A'
+API_TOKEN = '5473320366:AAEwnENs-cyjGA5pBJFA-qpeHiU-v4B2_5A'
 
-API_TOKEN = '5637578020:AAG9UtnefJHHZXHzs4v_9lt_7phGkt6BJC4'
+# API_TOKEN = '5637578020:AAG9UtnefJHHZXHzs4v_9lt_7phGkt6BJC4'
 
 from logdna import LogDNAHandler
 key='d7903ac4bec957d8e8d0ab45479fdd45'
@@ -68,6 +68,7 @@ log.setLevel(logging.DEBUG)
 options = {  'hostname': 'hostkey17726',  'ip': '46.17.100.162',  'mac': '56:6f:ff:5b:01:24'}
 options['index_meta'] = True
 mezmo = LogDNAHandler(key, options)
+logging.basicConfig(level=logging.INFO)
 logging.basicConfig(handlers=[mezmo])
 
 class States(StatesGroup):
@@ -192,8 +193,8 @@ async def start_handler(msg: types.Message):
 
             uri = "https://api.yclients.com/api/v1/records/651183"
             headers = {"Accept" : "application/vnd.yclients.v2+json","Content-Type" : "application/json","Authorization" : "Bearer uw2xhhghwja3kbkmadh4, User f774e3eb777a5244ccbe927cf8c6047f"}
-            now = datetime.today()
-            start_day = now - timedelta(days=1,hours=-3)
+            now = datetime.today() + timedelta(hours=3)
+            start_day = now - timedelta(days=1)
             start_day_str = str(start_day.day)+'.'+str(start_day.month)+'.'+str(start_day.year)
             end_day_str = str(now.day)+'.'+str(now.month)+'.'+str(now.year)
             params = {'start_date': start_day_str, 'end_date': end_day_str, 'staff_id':staff_id}
@@ -234,7 +235,7 @@ async def start_handler(msg: types.Message):
 
             uri = "https://api.yclients.com/api/v1/records/651183"
             headers = {"Accept" : "application/vnd.yclients.v2+json","Content-Type" : "application/json","Authorization" : "Bearer uw2xhhghwja3kbkmadh4, User f774e3eb777a5244ccbe927cf8c6047f"}
-            now = datetime.today()
+            now = datetime.today() + timedelta(hours=3)
             start_day_str = str(now.day)+'.'+str(now.month)+'.'+str(now.year)
             params = {'start_date': start_day_str, 'end_date':start_day_str,'staff_id':staff_id}
             records_crm = json.loads(requests.get(uri, params=params, headers=headers).text)['data']
@@ -282,9 +283,9 @@ async def start_handler(msg: types.Message):
                 except Exception as e:
                     print('error send link record',e, student_user_id)
 
-            # records_file[record_id].update({'got_record':True})
-            # with open('records_file.txt','w') as file: 
-            #     file.write(json.dumps(records_file))
+            records_file[record_id].update({'got_record':True})
+            with open('records_file.txt','w') as file: 
+                file.write(json.dumps(records_file))
 
             await bot.send_message(user_id, 'Ссылка отправлена: '+students_name, reply_markup=keyboard)
             
@@ -551,9 +552,11 @@ async def start_handler(msg: types.Message):
         #get client id
         uri = "https://api.yclients.com/api/v1/company/651183/clients/search/"
         headers = {"Accept" : "application/vnd.yclients.v2+json","Content-Type" : "application/json","Authorization" : "Bearer uw2xhhghwja3kbkmadh4, User f774e3eb777a5244ccbe927cf8c6047f"}
-        data = json.dumps({'fields' : ['id','phone'], 'page_size': 300})
+        data = json.dumps({'fields' : ['id','phone','discount'], 'page_size': 300})
         for client in json.loads(requests.post(uri, headers=headers, data=data).text)['data']: 
-            if client['phone'] == number: client_id = client['id']
+            if client['phone'] == number: 
+                old_discount = client['discount']
+                client_id = client['id']
 
         #edit client discount
         # discount = 99.9
@@ -585,6 +588,12 @@ async def start_handler(msg: types.Message):
         short_link_token = json.loads(requests.get(uri, params=params,headers=headers).text)['data']['short_link_token']
 
         link = f'https://yclients.com/pay/{short_link_token}/'
+
+        data = json.dumps({'discount': old_discount})
+        uri = f"https://api.yclients.com/api/v1/client/651183/{client_id}"
+        headers = {"Accept" : "application/vnd.yclients.v2+json","Content-Type" : "application/json","Authorization" : "Bearer uw2xhhghwja3kbkmadh4, User f774e3eb777a5244ccbe927cf8c6047f"}
+        params = {'name':name,'phone':number}
+        response = json.loads(requests.put(uri, headers=headers, params=params, data=data).text)
         
         if number_link.get(number)==None:
             number_link.update({number:{service:{'link':link, 'record_id': record_id}}})
@@ -648,7 +657,8 @@ async def start_handler(msg: types.Message):
         if balences[number] != None:
             answer = 'Cписок ваших абонементов и оставшиеся занятия по абонементу:\n'
             for balance_of_subject in balences[number]:
-                answer += balance_of_subject+': '+str(balences[number][balance_of_subject])+'\n'
+                if balences[number][balance_of_subject] != 0:
+                    answer += balance_of_subject+': '+str(balences[number][balance_of_subject])+'\n'
         else:
             answer = 'Абонемент не подключен'
 
@@ -663,7 +673,8 @@ async def start_handler(msg: types.Message):
             
             if balences[number] != None:
                 for balance_of_subject in balences[number]:
-                    answer += '*·* '+balance_of_subject+': '+str(balences[number][balance_of_subject])+'\n'
+                    if balences[number][balance_of_subject] != 0:
+                        answer += '*·* '+balance_of_subject+': '+str(balences[number][balance_of_subject])+'\n'
             else:
                 answer += '  Абонемент не подключен\n'
     await bot.send_message(user_id,answer,parse_mode=types.ParseMode.MARKDOWN)
@@ -760,7 +771,7 @@ async def start_handler(msg: types.Message):
                     record_file = records_file[record_id]
                     students_time_zone = record_file['students_time_zone']
                     students_time_start = datetime.fromisoformat(record['date']) + timedelta(hours=int(students_time_zone))
-                    now = datetime.now() + timedelta(hours=int(students_time_zone))
+                    now = datetime.now() + timedelta(hours=int(students_time_zone)+3)
                     if students_time_start > now:
                         is_record = True
                         break
@@ -1422,6 +1433,7 @@ async def process_callback(query: types.CallbackQuery, callback_data: dict):
                                          {"$set": {'one_time_discounts': promo_code[1].split(' ')[0].split('/')[0]+' '+promo_code[1].split(' ')[1].split('/')[0]}})
         promo_codes.update_one({"_id": promo_code[0]}, 
                                          {"$set": {'value': int(promo_code[2])-1}})
+
 
     #edit number_test_lessons.txt
 #     with open('number_test_lessons.txt','r') as text: 

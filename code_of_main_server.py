@@ -15,13 +15,14 @@ import traceback
 import logging
 
 from logdna import LogDNAHandler
-key='d7903ac4bec957d8e8d0ab45479fdd45'
-log = logging.getLogger('logdna')
-options = {  'hostname': 'hostkey17726',  'ip': '46.17.100.162',  'mac': '56:6f:ff:5b:01:24'}
-options['index_meta'] = True
-mezmo = LogDNAHandler(key, options)
-log.addHandler(mezmo)
 
+
+# key='d7903ac4bec957d8e8d0ab45479fdd45'
+# log = logging.getLogger('logdna')
+# options = {  'hostname': 'hostkey17726',  'ip': '46.17.100.162',  'mac': '56:6f:ff:5b:01:24'}
+# options['index_meta'] = True
+# mezmo = LogDNAHandler(key, options)
+# log.addHandler(mezmo)
 
 
 from gcsa.event import Event
@@ -37,10 +38,21 @@ base_students = base['students']
 backups = client['backups']
 files_backups = backups['is_in_file_backup']
 
+# Услуга-абонемент:Реальный абонемент для выдачи. Математика, русский язык
 item_ids = {10937974:22352808, 10940358:22352794}
 
+abonement_ids = [22352808,22352794]
+subject_abonement_id = {'Математика':22352808, 'Русский язык':22352794}
 
 
+abonements_ids = {}
+
+def do_log(msg,level):
+    url = "https://logs.logdna.com/logs/ingest"
+    headers = {"Content-Type": "application/json","apikey": "d7903ac4bec957d8e8d0ab45479fdd45"}
+    querystring = {"hostname":"hostkey17726","mac":"56:6f:ff:5b:01:24","ip":"46.17.100.162","now":time.time()}
+    payload = {"lines": [{"timestamp": time.time(),"line": msg,"app": "Main_server","level": level}]}
+    response = requests.request("POST", url, headers=headers, params=querystring, data=json.dumps(payload))
 
 counter = 0
 while True:
@@ -76,8 +88,10 @@ while True:
                 
                 if subject.split(' ')[0] == 'Абонемент': continue
                 
-                log.info('New record '+str(record_id)+' '+str(crm_time_start)+' '+number)
-                
+                # log.info('New record '+str(record_id)+' '+str(crm_time_start)+' '+number)
+                do_log('New record '+str(record_id)+' '+str(crm_time_start)+' '+number,'INFO')
+
+
                 is_deleted = record['deleted']
                 
                 crm_timezone = 0 # НЕ ЗАБЫТЬ УБРАТЬ
@@ -128,13 +142,15 @@ while True:
                     teachers_time_zone = int(item['time_zone'])
 
                 if is_student == False: 
-                    log.info(str(record_id)+' '+'not_such_student_in_db')
+                    do_log(str(record_id)+' '+'not_such_student_in_db','ERRORE')
+                    # log.info(str(record_id)+' '+'not_such_student_in_db')
                     print('not_such_student_in_db')
                     students_name = "ERRORE not_such_student_in_db".split(' ')[1]
                     students_time_zone = +2
                 
                 if is_teacher == False: 
-                    log.info(str(record_id)+' '+'not_such_teacher_in_db')
+                    do_log(str(record_id)+' '+'not_such_teacher_in_db','ERRORE')
+                    # log.info(str(record_id)+' '+'not_such_teacher_in_db')
                     print('not_such_teacher_in_db')
                     continue
                 
@@ -232,42 +248,62 @@ while True:
                 subject = record_file['subject']
                 
                 #BALANCE
-                uri = 'https://api.yclients.com/api/v1/loyalty/abonements/'
-                headers = {"Accept" : "application/vnd.yclients.v2+json","Content-Type" : "application/json","Authorization" : "Bearer uw2xhhghwja3kbkmadh4, User f774e3eb777a5244ccbe927cf8c6047f"}
-                params = {'company_id' : '651183','phone' : number}
-                response = json.loads(requests.get(uri, params=params,headers=headers).text)['data']
-                            
-                crm_is_balance = False
-                crm_balance = None
-                for one_balance in response:
-                    if one_balance['balance_string'].split(',')[0] == subject:
-                        crm_balance = one_balance['united_balance_services_count']  
-                        crm_is_balance = True
-
-
-
                 crm_time_start = datetime.fromisoformat(record['date'])
                 crm_seance_length = record['seance_length']
                 crm_is_deleted = record['deleted']
 
                 teachers_time_zone = record_file['teachers_time_zone']
                 students_time_zone = record_file['students_time_zone']
-                # crm_timezone = record_file['crm_timezone']
+
+                teachers_time_start = crm_time_start + timedelta(hours=int(teachers_time_zone))
+                teachers_time_end = teachers_time_start + timedelta(seconds = crm_seance_length)
+
+                students_time_start = crm_time_start + timedelta(hours=int(students_time_zone))
+                students_time_end = students_time_start + timedelta(seconds = crm_seance_length)
+
+                now_for_student = now + timedelta(hours=int(students_time_zone))
+
+                if students_time_start - timedelta(minutes=372) < now_for_student < students_time_start - timedelta(minutes=360) or students_time_end - timedelta(minutes=12) < now_for_student < students_time_end:
+                    do_log('CHECK BALANCE: '+str(record_id),'INFO')
+                    uri = 'https://api.yclients.com/api/v1/loyalty/abonements/'
+                    headers = {"Accept" : "application/vnd.yclients.v2+json","Content-Type" : "application/json","Authorization" : "Bearer uw2xhhghwja3kbkmadh4, User f774e3eb777a5244ccbe927cf8c6047f"}
+                    params = {'company_id' : '651183','phone' : number}
+                    response = json.loads(requests.get(uri, params=params,headers=headers).text)['data']
+                                
+                    crm_is_balance = False
+                    crm_balance = None
+                    for one_balance in response:
+                        if one_balance['balance_string'].split(',')[0] == subject:
+                            crm_balance = one_balance['united_balance_services_count']  
+                            crm_is_balance = True
+                
+                    changed_is_balance = file_is_balance != crm_is_balance
+                    changed_balance = file_balance != crm_balance
+
+                    if changed_is_balance or changed_balance:
+                        record_file['is_balance'] = crm_is_balance
+                        record_file['balance'] = crm_balance
+                        
+                        do_log('CHENGED BALANCE: '+str(record_id),'INFO')
+                        
+                        records_file.update({record_id:record_file}) 
+
+                        with open('records_file.txt','w') as file: 
+                            file.write(json.dumps(records_file))
+
+
+
 
                 changed_start_time = crm_time_start != file_time_start
                 changed_seance_length = crm_seance_length != file_seance_length
-                changed_is_balance = file_is_balance != crm_is_balance
-                changed_balance = file_balance != crm_balance
+                # changed_is_balance = file_is_balance != crm_is_balance
+                # changed_balance = file_balance != crm_balance
                 
 
 
                 if changed_start_time or changed_seance_length:
-                    log.info('CHENGED TIME: '+str(record_id)+' '+str(file_time_start)+' '+str(crm_time_start))
-                    teachers_time_start = crm_time_start + timedelta(hours=int(teachers_time_zone))
-                    teachers_time_end = teachers_time_start + timedelta(seconds = crm_seance_length)
-
-                    students_time_start = crm_time_start + timedelta(hours=int(students_time_zone))
-                    students_time_end = students_time_start + timedelta(seconds = crm_seance_length)
+                    do_log('CHENGED TIME: '+str(record_id)+' '+str(file_time_start)+' '+str(crm_time_start),'INFO')
+                    # log.info('CHENGED TIME: '+str(record_id)+' '+str(file_time_start)+' '+str(crm_time_start))
 
                     # print(record_id,' ', crm_time_start, ' ', file_time_start)
                     item_teacher = base_teachers.find({'_id':full_teachers_name})
@@ -310,16 +346,6 @@ while True:
                     with open('records_file.txt','w') as file: 
                         file.write(json.dumps(records_file))
 
-                if changed_is_balance or changed_balance:
-                    record_file['is_balance'] = crm_is_balance
-                    record_file['balance'] = crm_balance
-                    
-                    # log.info('CHENGED BALANCE: '+str(record_id))
-                    
-                    records_file.update({record_id:record_file}) 
-
-                    with open('records_file.txt','w') as file: 
-                        file.write(json.dumps(records_file))
 
 
         record_ids = []
@@ -349,8 +375,9 @@ while True:
                 event_id =file_record['event_id']
                 print('DELETED: ',id_missing_record)
                 full_teachers_name = file_record['full_teachers_name']
-                
-                log.info('DELETED: '+str(id_missing_record))
+
+                do_log('DELETED: '+str(id_missing_record),'INFO')
+                # log.info('DELETED: '+str(id_missing_record))
                 
                 item_teacher = base_teachers.find({'_id':file_record['full_teachers_name']})
 
@@ -385,9 +412,14 @@ while True:
                 records_file.update({id_missing_record:file_record}) 
                 with open('records_file.txt','w') as file: 
                     file.write(json.dumps(records_file))    
-                    
-        # CHECK TRANSACHIONS
+        
 
+
+
+
+
+
+        # CHECK TRANSACHIONS
         uri = "https://api.yclients.com/api/v1/transactions/651183/"
         headers = {"Accept" : "application/vnd.yclients.v2+json","Content-Type" : "application/json","Authorization" : "Bearer uw2xhhghwja3kbkmadh4, User f774e3eb777a5244ccbe927cf8c6047f"}
         params = {'real_money':1}
@@ -424,13 +456,15 @@ while True:
                     try:
                         number_link[number].pop(str(transaction['sold_item_id']))
                     except:
-                        log.info(f'TRANSACTION {client_id} {abonement_id} {amount} not in number_link!!!!') 
+                        do_log(f'TRANSACTION {client_id} {abonement_id} {amount} not in number_link!!!!','ERRORE')
+                        # log.info(f'TRANSACTION {client_id} {abonement_id} {amount} not in number_link!!!!') 
                     with open('number_link.txt','w') as file: 
                         file.write(json.dumps(number_link))
                     files_transactions.update({id_transaction:{'client_id':client_id,'abonement_id':abonement_id,'amount':amount}}) 
                     with open('transactions.txt','w') as file: 
                         file.write(json.dumps(files_transactions))
-                    log.info(f'TRANSACTION {client_id} {abonement_id} {amount} not record_id in transaction !!!!') 
+                    do_log('TRANSACTION {client_id} {abonement_id} {amount} not record_id in transaction !!!!','ERRORE')
+                    # log.info(f'TRANSACTION {client_id} {abonement_id} {amount} not record_id in transaction !!!!') 
 
                 #sell abonement
                 uri = "https://api.yclients.com/api/v1/storage_operations/operation/651183/"
@@ -462,7 +496,8 @@ while True:
                 try:
                     number_link[number].pop(str(transaction['sold_item_id']))
                 except:
-                    log.info(f'TRANSACTION {client_id} {abonement_id} {amount} not in number_link!!!!') 
+                    do_log(f'TRANSACTION {client_id} {abonement_id} {amount} not in number_link!!!!','ERRORE')
+                    # log.info(f'TRANSACTION {client_id} {abonement_id} {amount} not in number_link!!!!') 
                 with open('number_link.txt','w') as file: 
                     file.write(json.dumps(number_link))
 
@@ -485,7 +520,9 @@ while True:
                 else: is_in_file = json.loads(text)
                 
             now = str(datetime.now()+timedelta(hours=3))
-            log.info('DO_BACKUP: '+str(datetime.now()))
+            do_log('DO_BACKUP: '+str(datetime.now()),'INFO')
+
+            # log.info('DO_BACKUP: '+str(datetime.now()))
                 
             mydict = {"_id" : now, "data" : json.dumps(is_in_file)}
             files_backups.insert_one(mydict)
@@ -513,4 +550,5 @@ while True:
             
             
     except:
-        log.exception('Main server')
+        do_log(traceback.format_exc(),'ERRORE')
+        # log.exception('Main server')
