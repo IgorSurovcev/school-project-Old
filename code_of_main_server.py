@@ -263,8 +263,8 @@ while True:
 
                 now_for_student = now + timedelta(hours=int(students_time_zone))
 
-                if students_time_start - timedelta(minutes=372) < now_for_student < students_time_start - timedelta(minutes=360) or students_time_end - timedelta(minutes=12) < now_for_student < students_time_end:
-                    do_log('CHECK BALANCE: '+str(record_id),'INFO')
+                if students_time_start - timedelta(minutes=367) < now_for_student < students_time_start - timedelta(minutes=360) or students_time_end - timedelta(minutes=7) < now_for_student < students_time_end:
+                    # do_log('CHECK BALANCE: '+str(record_id),'INFO')
                     uri = 'https://api.yclients.com/api/v1/loyalty/abonements/'
                     headers = {"Accept" : "application/vnd.yclients.v2+json","Content-Type" : "application/json","Authorization" : "Bearer uw2xhhghwja3kbkmadh4, User f774e3eb777a5244ccbe927cf8c6047f"}
                     params = {'company_id' : '651183','phone' : number}

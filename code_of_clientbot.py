@@ -34,8 +34,6 @@ blanks = {
     'not_username_in_base':'Привет! На связи A3artSchool! ✌️\nЗдесь можно записаться на бесплатный тестовый урок, чтобы познакомиться с нами поближе.\nУрок длится 30 минут, где мы вместе выясним какой текущий уровень знаний, определим главную цель занятий и составим план подготовки.\nЧтобы записаться на урок кликай кнопку ниже!'
 }
 
-administators_ids = [676352317, 1226474188]
-
 tz_1 = [['МСК-1','МСК+0','МСК+1'],['МСК+2','МСК+3','МСК+4'],['МСК+5','МСК+6','МСК+7'],['МСК+8','МСК+9','Другое']]
 tz_2 = [['GMT+0', 'GMT+1','GMT+2'], ['GMT-1', 'GMT-2', 'GMT-3'], ['GMT-4', 'GMT-5', 'GMT-6'], ['GMT-7', 'GMT-8', 'GMT-9'], ['GMT-10','GMT-11','Назад']]
 administators_ids = [676352317, 1226474188] #1226474188
@@ -978,7 +976,9 @@ async def handle_location(msg: types.Message):
     data = await state.get_data()
     students_full_name = data['students_full_name']
     parents_full_name = data['parents_full_name']
-    timezone = '+'+str(data['timezone'])
+    if data['timezone'] < 0 : timezone = str(data['timezone'])
+    elif data['timezone'] >= 0 : timezone = '+'+str(data['timezone'])
+    
     if parents_full_name == None: full_name = students_full_name
     else: full_name =  parents_full_name 
     
@@ -1056,7 +1056,8 @@ async def handle_location(msg: types.Message):
     data = await state.get_data()
     students_full_name = data['students_full_name']
     parents_full_name = data['parents_full_name']
-    timezone = '+'+str(data['timezone'])
+    if data['timezone'] < 0 : timezone = str(data['timezone'])
+    elif data['timezone'] >= 0 : timezone = '+'+str(data['timezone'])
 
     if parents_full_name == None: full_name = students_full_name
     else: full_name =  parents_full_name 
