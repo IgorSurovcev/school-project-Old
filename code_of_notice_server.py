@@ -12,20 +12,14 @@ from aiogram.dispatcher.filters.state import State, StatesGroup
 import json
 import traceback
         
-# from logdna import LogDNAHandler
-# key='d7903ac4bec957d8e8d0ab45479fdd45'
-# log = logging.getLogger('logdna')
-# options = {  'hostname': 'hostkey17726',  'ip': '46.17.100.162',  'mac': '56:6f:ff:5b:01:24'}
-# options['index_meta'] = True
-# mezmo = LogDNAHandler(key, options)
-# log.addHandler(mezmo)
+from datadog import initialize, api
+
+
+options = {"api_key": "c860bcea1999acd4362c5f8a846783c6", "app_key": "ba7066ae6eb26669d762d0a2108b25e825f9ba15",}
+initialize(**options)
 
 def do_log(msg,level):
-    url = "https://logs.logdna.com/logs/ingest"
-    headers = {"Content-Type": "application/json","apikey": "d7903ac4bec957d8e8d0ab45479fdd45"}
-    querystring = {"hostname":"hostkey17726","mac":"56:6f:ff:5b:01:24","ip":"46.17.100.162","now":time.time()}
-    payload = {"lines": [{"timestamp": time.time(),"line": msg,"app": "Notice_server","level": level}]}
-    response = requests.request("POST", url, headers=headers, params=querystring, data=json.dumps(payload))
+    api.Event.create(title='Notice_server', text=msg, alert_type=level)
         
 def do_linkpay(record_id):
     uri = f'https://api.yclients.com/api/v1/record/651183/{record_id}'
@@ -107,13 +101,13 @@ blanks = {
     
     'notice_2_parents' : '*Урок окончен!*\nОстаток занятий у ученика ({}) по абонементу {}: {}',
     
-    'notice_1_not_balance' : '*Уведомление*\nДобрый день! 😊\nСегодня в {} запланировано занятие по предмету {}.\nСсылка для подключения:\n{}\n-------------------\nУрок все еще не оплачен. Оплатите по ссылке: {}\nЛибо приобретите абонемент (рекомендуется)',
+    'notice_1_not_balance' : '*Уведомление*\nДобрый день! 😊\nСегодня в {} запланировано занятие по предмету {}.\nСсылка для подключения:\n{}\n-------------------\nУрок не оплачен. Оплатите по ссылке: {}\nЛибо приобретите абонемент (рекомендуется)',
     
-    'notice_1_internally_not_balance' : '*Уведомление*\nДобрый день! 😊\nСегодня в {} запланировано занятие по предмету {}.\n-------------------\nУрок все еще не оплачен. Оплатите по ссылке: {}\nЛибо приобретите абонемент (рекомендуется)',
+    'notice_1_internally_not_balance' : '*Уведомление*\nДобрый день! 😊\nСегодня в {} запланировано занятие по предмету {}.\n-------------------\nУрок не оплачен. Оплатите по ссылке: {}\nЛибо приобретите абонемент (рекомендуется)',
     
-    'notice_1_not_balance_parents' : '*Уведомление*\nДобрый день! 😊\nСегодня у ученика ({}) в {} запланировано занятие по предмету {}.\nСсылка для подключения:\n{}\n-------------------\nУрок все еще не оплачен. Оплатите по ссылке: {}\nЛибо приобретите абонемент (рекомендуется)',
+    'notice_1_not_balance_parents' : '*Уведомление*\nДобрый день! 😊\nСегодня у ученика ({}) в {} запланировано занятие по предмету {}.\nСсылка для подключения:\n{}\n-------------------\nУрок не оплачен. Оплатите по ссылке: {}\nЛибо приобретите абонемент (рекомендуется)',
     
-    'notice_1_internally_not_balance_parents' : '*Уведомление*\nДобрый день! 😊\nСегодня у ученика ({}) в {} запланировано занятие по предмету {}.\n-------------------\nУрок все еще не оплачен. Оплатите по ссылке: {}\nЛибо приобретите абонемент (рекомендуется)'
+    'notice_1_internally_not_balance_parents' : '*Уведомление*\nДобрый день! 😊\nСегодня у ученика ({}) в {} запланировано занятие по предмету {}.\n-------------------\nУрок не оплачен. Оплатите по ссылке: {}\nЛибо приобретите абонемент (рекомендуется)'
 }
 
 
@@ -227,7 +221,7 @@ while True:
                             else:                    
                                 send_first_notice(user_id,blanks['notice_1_internally'].format(beautiful_time,subject))
                     except:
-                        do_log(traceback.format_exc(),'ERRORE')
+                        do_log(traceback.format_exc(),'error')
                 else:
                     try:
                         print("FIRST ",seconds, record_id, is_balance, balance, beautiful_time)
@@ -252,7 +246,7 @@ while True:
                             else:                        
                                 send_first_notice(user_id,blanks['notice_1_internally_parents'].format(students_name,beautiful_time,subject))
                     except:
-                        do_log(traceback.format_exc(),'ERRORE')
+                        do_log(traceback.format_exc(),'error')
 
         #SECOND
         if balance != None:
@@ -280,13 +274,13 @@ while True:
                             print("SECOND ",seconds, record_id, is_balance, balance, beautiful_time)
                             send_second_notice(user_id,blanks['notice_2'].format(subject,balance))
                         except:
-                            do_log(traceback.format_exc(),'ERRORE')
+                            do_log(traceback.format_exc(),'error')
                     else:
                         try:
                             print("SECOND ",seconds, record_id, is_balance, balance, beautiful_time)
                             send_second_notice(user_id,blanks['notice_2_parents'].format(students_name,subject,balance))
                         except:
-                            do_log(traceback.format_exc(),'ERRORE')
+                            do_log(traceback.format_exc(),'error')
                         
         # print("One time:",time.process_time()-time_start_2) 
     

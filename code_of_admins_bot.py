@@ -47,14 +47,25 @@ class States(StatesGroup):
     GET_PROMO_CODE = State()
     # GET_USER_ID = State()
     
-from logdna import LogDNAHandler
-key='d7903ac4bec957d8e8d0ab45479fdd45'
-log = logging.getLogger('logdna')
-log.setLevel(logging.DEBUG)
-options = {  'hostname': 'hostkey17726',  'ip': '46.17.100.162',  'mac': '56:6f:ff:5b:01:24'}
-options['index_meta'] = True
-mezmo = LogDNAHandler(key, options)
-logging.basicConfig(handlers=[mezmo])
+# from logdna import LogDNAHandler
+# key='d7903ac4bec957d8e8d0ab45479fdd45'
+# log = logging.getLogger('logdna')
+# log.setLevel(logging.DEBUG)
+# options = {  'hostname': 'hostkey17726',  'ip': '46.17.100.162',  'mac': '56:6f:ff:5b:01:24'}
+# options['index_meta'] = True
+# mezmo = LogDNAHandler(key, options)
+# logging.basicConfig(handlers=[mezmo])
+
+import datadog
+from datadog_logger import DatadogLogHandler
+import logging
+
+datadog.initialize(api_key="c860bcea1999acd4362c5f8a846783c6", app_key="ba7066ae6eb26669d762d0a2108b25e825f9ba15")
+datadog_handler = DatadogLogHandler(tags=["some:tag"], mentions=["@some-mention"], level=logging.ERROR)
+logging.basicConfig(level=logging.ERROR)
+logger = logging.getLogger()
+logger.addHandler(datadog_handler)
+
 
 API_TOKEN = '5505602681:AAG4wWLE4GCTYxmSmoF3LHHC43fe41Leiak'
 bot = Bot(token=API_TOKEN)
@@ -505,15 +516,16 @@ async def get_info_teacher(msg: types.Message):
     full_name = msg.text.split('\n')[0]
     token = msg.text.split('\n')[1]
     time_zone = msg.text.split('\n')[2]
-    number = msg.text.split('\n')[3]
+    staff_id = msg.text.split('\n')[3]
+    user_id = msg.text.split('\n')[4]
     
-    await state.update_data(full_name=full_name,token=token,time_zone=time_zone,number=number)
+    await state.update_data(full_name=full_name,token=token,time_zone=time_zone,staff_id=staff_id,user_id=user_id)
     
     keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
     buttons = ["Да","/cancel"]
     keyboard.add(*buttons)
     
-    await bot.send_message(msg.from_user.id, 'Все верно?\n{}\n{}\n{}\n{}'.format(full_name,token,time_zone,number), reply_markup=keyboard)
+    await bot.send_message(msg.from_user.id, 'Все верно?\n{}\n{}\n{}\n{}\n{}'.format(full_name,token,time_zone,staff_id,user_id), reply_markup=keyboard)
     await States.CONFIRM_TEACHER.set()
         
 
@@ -561,7 +573,8 @@ async def get_info_teacher(msg: types.Message):
         "_id" : data['full_name'],
         "token" : data['token'],
         "time_zone" : data['time_zone'],
-        "number" : data['number']
+        "staff_id" : data['staff_id'],
+        "user_id" : data['user_id']
         }
         base_teachers.insert_one(mydict)
         await bot.send_message(msg.from_user.id, 'Данные преподавателя занесены в систему\nЕсли они окажутся неверными и система сломается, я вас найду и разберусь лично', reply_markup=keyboard)

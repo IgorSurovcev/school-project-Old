@@ -14,7 +14,7 @@ from google.auth.transport.requests import Request
 import traceback
 import logging
 
-from logdna import LogDNAHandler
+from datadog import initialize, api
 
 
 # key='d7903ac4bec957d8e8d0ab45479fdd45'
@@ -45,14 +45,14 @@ abonement_ids = [22352808,22352794]
 subject_abonement_id = {'Математика':22352808, 'Русский язык':22352794}
 
 
-abonements_ids = {}
+abonements_ids = {}     
+
+options = {"api_key": "c860bcea1999acd4362c5f8a846783c6", "app_key": "ba7066ae6eb26669d762d0a2108b25e825f9ba15",}
+initialize(**options)
 
 def do_log(msg,level):
-    url = "https://logs.logdna.com/logs/ingest"
-    headers = {"Content-Type": "application/json","apikey": "d7903ac4bec957d8e8d0ab45479fdd45"}
-    querystring = {"hostname":"hostkey17726","mac":"56:6f:ff:5b:01:24","ip":"46.17.100.162","now":time.time()}
-    payload = {"lines": [{"timestamp": time.time(),"line": msg,"app": "Main_server","level": level}]}
-    response = requests.request("POST", url, headers=headers, params=querystring, data=json.dumps(payload))
+    api.Event.create(title='Main_server', text=msg, alert_type=level)
+
 
 counter = 0
 while True:
@@ -89,7 +89,7 @@ while True:
                 if subject.split(' ')[0] == 'Абонемент': continue
                 
                 # log.info('New record '+str(record_id)+' '+str(crm_time_start)+' '+number)
-                do_log('New record '+str(record_id)+' '+str(crm_time_start)+' '+number,'INFO')
+                do_log('New record '+str(record_id)+' '+str(crm_time_start)+' '+number,'info')
 
 
                 is_deleted = record['deleted']
@@ -142,14 +142,14 @@ while True:
                     teachers_time_zone = int(item['time_zone'])
 
                 if is_student == False: 
-                    do_log(str(record_id)+' '+'not_such_student_in_db','ERRORE')
+                    do_log(str(record_id)+' '+'not_such_student_in_db','error')
                     # log.info(str(record_id)+' '+'not_such_student_in_db')
                     print('not_such_student_in_db')
-                    students_name = "ERRORE not_such_student_in_db".split(' ')[1]
+                    students_name = "error not_such_student_in_db".split(' ')[1]
                     students_time_zone = +2
                 
                 if is_teacher == False: 
-                    do_log(str(record_id)+' '+'not_such_teacher_in_db','ERRORE')
+                    do_log(str(record_id)+' '+'not_such_teacher_in_db','error')
                     # log.info(str(record_id)+' '+'not_such_teacher_in_db')
                     print('not_such_teacher_in_db')
                     continue
@@ -264,7 +264,7 @@ while True:
                 now_for_student = now + timedelta(hours=int(students_time_zone))
 
                 if students_time_start - timedelta(minutes=367) < now_for_student < students_time_start - timedelta(minutes=360) or students_time_end - timedelta(minutes=7) < now_for_student < students_time_end:
-                    # do_log('CHECK BALANCE: '+str(record_id),'INFO')
+                    # do_log('CHECK BALANCE: '+str(record_id),'info')
                     uri = 'https://api.yclients.com/api/v1/loyalty/abonements/'
                     headers = {"Accept" : "application/vnd.yclients.v2+json","Content-Type" : "application/json","Authorization" : "Bearer uw2xhhghwja3kbkmadh4, User f774e3eb777a5244ccbe927cf8c6047f"}
                     params = {'company_id' : '651183','phone' : number}
@@ -284,7 +284,7 @@ while True:
                         record_file['is_balance'] = crm_is_balance
                         record_file['balance'] = crm_balance
                         
-                        do_log('CHENGED BALANCE: '+str(record_id),'INFO')
+                        do_log('CHENGED BALANCE: '+str(record_id),'info')
                         
                         records_file.update({record_id:record_file}) 
 
@@ -302,7 +302,7 @@ while True:
 
 
                 if changed_start_time or changed_seance_length:
-                    do_log('CHENGED TIME: '+str(record_id)+' '+str(file_time_start)+' '+str(crm_time_start),'INFO')
+                    do_log('CHENGED TIME: '+str(record_id)+' '+str(file_time_start)+' '+str(crm_time_start),'info')
                     # log.info('CHENGED TIME: '+str(record_id)+' '+str(file_time_start)+' '+str(crm_time_start))
 
                     # print(record_id,' ', crm_time_start, ' ', file_time_start)
@@ -329,11 +329,10 @@ while True:
                     
                     
                     gc = GoogleCalendar(credentials=credentials)
-
-                    event = gc.get_event(event_id)
-                    event.start = teachers_time_start
-                    event.end = teachers_time_end
                     try:
+                        event = gc.get_event(event_id)
+                        event.start = teachers_time_start
+                        event.end = teachers_time_end
                         gc.update_event(event)
                     except: None
                         
@@ -373,10 +372,9 @@ while True:
             else:
                 # token = file_record['token']
                 event_id =file_record['event_id']
-                print('DELETED: ',id_missing_record)
                 full_teachers_name = file_record['full_teachers_name']
 
-                do_log('DELETED: '+str(id_missing_record),'INFO')
+                do_log('DELETED: '+str(id_missing_record),'info')
                 # log.info('DELETED: '+str(id_missing_record))
                 
                 item_teacher = base_teachers.find({'_id':file_record['full_teachers_name']})
@@ -399,11 +397,10 @@ while True:
                                                  {"$set": {'token': credentials.to_json()}})
         
                 gc = GoogleCalendar(credentials=credentials)
-
-                event = gc.get_event(event_id)
-                event.summary = '(ОТМЕНЕН) '+event.summary
-                event.color_id = 8
                 try:
+                    event = gc.get_event(event_id)
+                    event.summary = '(ОТМЕНЕН) '+event.summary
+                    event.color_id = 8
                     gc.update_event(event)
                 except: None
 
@@ -456,14 +453,14 @@ while True:
                     try:
                         number_link[number].pop(str(transaction['sold_item_id']))
                     except:
-                        do_log(f'TRANSACTION {client_id} {abonement_id} {amount} not in number_link!!!!','ERRORE')
+                        do_log(f'TRANSACTION {client_id} {abonement_id} {amount} not in number_link!!!!','error')
                         # log.info(f'TRANSACTION {client_id} {abonement_id} {amount} not in number_link!!!!') 
                     with open('number_link.txt','w') as file: 
                         file.write(json.dumps(number_link))
                     files_transactions.update({id_transaction:{'client_id':client_id,'abonement_id':abonement_id,'amount':amount}}) 
                     with open('transactions.txt','w') as file: 
                         file.write(json.dumps(files_transactions))
-                    do_log('TRANSACTION {client_id} {abonement_id} {amount} not record_id in transaction !!!!','ERRORE')
+                    do_log('TRANSACTION {client_id} {abonement_id} {amount} not record_id in transaction !!!!','error')
                     # log.info(f'TRANSACTION {client_id} {abonement_id} {amount} not record_id in transaction !!!!') 
 
                 #sell abonement
@@ -496,7 +493,7 @@ while True:
                 try:
                     number_link[number].pop(str(transaction['sold_item_id']))
                 except:
-                    do_log(f'TRANSACTION {client_id} {abonement_id} {amount} not in number_link!!!!','ERRORE')
+                    do_log(f'TRANSACTION {client_id} {abonement_id} {amount} not in number_link!!!!','error')
                     # log.info(f'TRANSACTION {client_id} {abonement_id} {amount} not in number_link!!!!') 
                 with open('number_link.txt','w') as file: 
                     file.write(json.dumps(number_link))
@@ -520,7 +517,7 @@ while True:
                 else: is_in_file = json.loads(text)
                 
             now = str(datetime.now()+timedelta(hours=3))
-            do_log('DO_BACKUP: '+str(datetime.now()),'INFO')
+            do_log('DO_BACKUP: '+str(datetime.now()),'info')
 
             # log.info('DO_BACKUP: '+str(datetime.now()))
                 
@@ -532,23 +529,25 @@ while True:
 
             for item in item_teacher:
                 _id = item['_id']
-                token = json.loads(item['token'])
+                token = item.get('token')
+                if token != None:
+                    token = json.loads(item['token'])
 
-                credentials = Credentials(
-                    token=token['token'],
-                    refresh_token=token['refresh_token'],
-                    client_id=token['client_id'],
-                    client_secret=token['client_secret'],
-                    scopes=token['scopes'],
-                    token_uri=token['token_uri'],
-                    expiry=token['expiry']
-                )
-                credentials.refresh(Request())
-                
-                base_teachers.update_one({"_id": _id}, {"$set": {'token': credentials.to_json()}})
+                    credentials = Credentials(
+                        token=token['token'],
+                        refresh_token=token['refresh_token'],
+                        client_id=token['client_id'],
+                        client_secret=token['client_secret'],
+                        scopes=token['scopes'],
+                        token_uri=token['token_uri'],
+                        expiry=token['expiry']
+                    )
+                    credentials.refresh(Request())
+                    
+                    base_teachers.update_one({"_id": _id}, {"$set": {'token': credentials.to_json()}})
             
             
             
     except:
-        do_log(traceback.format_exc(),'ERRORE')
+        do_log(traceback.format_exc(),'error')
         # log.exception('Main server')

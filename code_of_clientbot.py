@@ -54,20 +54,30 @@ categories = {
     '5 класс': 4714369
 }
 
-    
 API_TOKEN = '5473320366:AAEwnENs-cyjGA5pBJFA-qpeHiU-v4B2_5A'
 
 # API_TOKEN = '5637578020:AAG9UtnefJHHZXHzs4v_9lt_7phGkt6BJC4'
 
-from logdna import LogDNAHandler
-key='d7903ac4bec957d8e8d0ab45479fdd45'
-log = logging.getLogger('logdna')
-log.setLevel(logging.DEBUG)
-options = {  'hostname': 'hostkey17726',  'ip': '46.17.100.162',  'mac': '56:6f:ff:5b:01:24'}
-options['index_meta'] = True
-mezmo = LogDNAHandler(key, options)
-logging.basicConfig(level=logging.INFO)
-logging.basicConfig(handlers=[mezmo])
+# from logdna import LogDNAHandler
+# key='d7903ac4bec957d8e8d0ab45479fdd45'
+# log = logging.getLogger('logdna')
+# log.setLevel(logging.DEBUG)
+# options = {  'hostname': 'hostkey17726',  'ip': '46.17.100.162',  'mac': '56:6f:ff:5b:01:24'}
+# options['index_meta'] = True
+# mezmo = LogDNAHandler(key, options)
+# logging.basicConfig(level=logging.INFO)
+# logging.basicConfig(handlers=[mezmo])
+
+import datadog
+from datadog_logger import DatadogLogHandler
+import logging
+
+datadog.initialize(api_key="c860bcea1999acd4362c5f8a846783c6", app_key="ba7066ae6eb26669d762d0a2108b25e825f9ba15")
+datadog_handler = DatadogLogHandler(tags=["some:tag"], mentions=["@some-mention"], level=logging.ERROR)
+logging.basicConfig(level=logging.ERROR)
+logger = logging.getLogger()
+logger.addHandler(datadog_handler)
+
 
 class States(StatesGroup):
     NEWSLETTER = State()
@@ -135,7 +145,7 @@ async def start_handler(msg: types.Message):
         for user_id_file in is_in_file[number]:
             if user_id == user_id_file: numbers.append(number)
         
-    if numbers == [] and deleted_user_ids.get(user_id) == None:
+    if numbers == [] and (deleted_user_ids.get(user_id)==None or deleted_user_ids.get(user_id)==[]):
         keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
         buttons = ["Записаться на бесплатный урок"]
         keyboard.add(*buttons)
@@ -144,7 +154,7 @@ async def start_handler(msg: types.Message):
             await bot.send_message(administrators_id, f'Новый пользователь {username}')
         # await States.GO_STARTBOT.set()
 
-    elif numbers == [] and deleted_user_ids.get(user_id)!=None:
+    elif numbers == [] and (deleted_user_ids.get(user_id)!=None or deleted_user_ids.get(user_id)!=[]):
         for deleted_number in deleted_user_ids[user_id]:
             is_in_file[deleted_number].append(user_id)
             deleted_user_ids.update({user_id:[]})
@@ -234,8 +244,12 @@ async def start_handler(msg: types.Message):
             uri = "https://api.yclients.com/api/v1/records/651183"
             headers = {"Accept" : "application/vnd.yclients.v2+json","Content-Type" : "application/json","Authorization" : "Bearer uw2xhhghwja3kbkmadh4, User f774e3eb777a5244ccbe927cf8c6047f"}
             now = datetime.today() + timedelta(hours=3)
-            start_day_str = str(now.day)+'.'+str(now.month)+'.'+str(now.year)
-            params = {'start_date': start_day_str, 'end_date':start_day_str,'staff_id':staff_id}
+            start_date = now - timedelta(days=1)
+            end_date = now + timedelta(days=1)
+            start_date_str = str(start_date.day)+'.'+str(start_date.month)+'.'+str(start_date.year)
+            end_date_str = str(end_date.day)+'.'+str(end_date.month)+'.'+str(end_date.year)
+
+            params = {'start_date': start_date_str, 'end_date':end_date_str,'staff_id':staff_id}
             records_crm = json.loads(requests.get(uri, params=params, headers=headers).text)['data']
 
             with open('records_file.txt','r') as text: 
@@ -253,7 +267,7 @@ async def start_handler(msg: types.Message):
             for record in reversed(records_crm):
                 record_id = str(record['id'])
                 time_start = datetime.fromisoformat(record['date'])
-                if record['deleted']!=True and records_file.get(record_id) != None and time_start < now:
+                if record['deleted']!=True and records_file.get(record_id) != None and time_start + timedelta(minutes=10) < now:
                     students_name = records_file[record_id]['students_name']
                     times.append(time_start)
                     time_records.update({time_start:[students_name,records_file[record_id]['number'],records_file[record_id].get('got_record'),record_id]})
@@ -305,7 +319,7 @@ async def start_handler(msg: types.Message):
     await state.update_data(choise=msg.text)
     keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
     keyboard.add(*['Нет задания','Отмена'])
-    await bot.send_message(user_id, 'Пришли домашнее задание. Что отправишь, то и придет ученику (файл, изображение, текст)\nИли сообщи, что нет домашнего задания', reply_markup=keyboard)
+    await bot.send_message(user_id, 'Пришли домашнее задание. Что отправишь, то и придет ученику (файл, изображение, текст, но не группа!)\nИли сообщи, что нет домашнего задания', reply_markup=keyboard)
     await States.SEND_HOMETASK.set()
 
 @dp.message_handler(state=States.SEND_HOMETASK,content_types=types.ContentType.ANY)
@@ -398,7 +412,7 @@ async def func(msg: types.Message):
         for user_id_file in is_in_file[number]:
             if user_id == user_id_file: numbers.append(number)
         
-    if numbers == [] and deleted_user_ids.get(user_id) == None:
+    if numbers == [] and (deleted_user_ids.get(user_id) == None or deleted_user_ids.get(user_id) == []):
         keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
         buttons = ["Для себя","Для ребенка"]
         keyboard.add(*buttons)
@@ -850,6 +864,42 @@ async def start_handler(msg: types.Message):
 ################ START_BOT ####################
 ###############################################
 
+@dp.message_handler(commands=['зарегистрироваться'])
+# @dp.message_handler(text=['Записаться на бесплатный урок','записаться на бесплатный урок'])
+async def func(msg: types.Message):
+    user_id = str(msg.from_user.id)
+    state = dp.current_state(user=msg.from_user.id)
+
+    with open('is_in_file.txt','r') as data: 
+        text = data.read()
+        if text == '': is_in_file = {}
+        else: is_in_file = json.loads(text)
+    with open('deleted_user_ids.txt','r') as data: 
+        text = data.read()
+        if text == '': deleted_user_ids = {}
+        else: deleted_user_ids = json.loads(text)
+        
+    numbers = []
+    for number in is_in_file:
+        for user_id_file in is_in_file[number]:
+            if user_id == user_id_file: numbers.append(number)
+        
+    if numbers == [] and (deleted_user_ids.get(user_id) == [] or deleted_user_ids.get(user_id) == None):
+        keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
+        buttons = ["Для себя","Для ребенка"]
+        keyboard.add(*buttons)
+        
+        await bot.send_message(user_id, 'Отлично!\nВы будете заниматься сами или записываете ребенка?', reply_markup=keyboard)
+        await state.update_data(is_just_registration=True)
+        await States.CHOISE_FULLNAME.set()
+    else:
+        keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
+        buttons = ["/start"]
+        keyboard.add(*buttons)
+        await bot.send_message(user_id, 'Вы уже зарегистрированы', reply_markup=keyboard)
+
+    
+
 
 @dp.message_handler(state=States.CHOISE_FULLNAME,text=["Для себя","Для ребенка"])
 async def func(msg: types.Message):
@@ -1141,72 +1191,157 @@ async def handle_location(msg: types.Message):
     
     data = await state.get_data()
     
-    subjects_buttons = data['subjects_buttons']
-    
-    if msg['text'] == 'Нет промокода':
+    promo_code = msg['text']
+
+    if promo_code == 'Нет промокода':
         await state.update_data(promo_code=None)
         keyboard = types.ReplyKeyboardRemove()
         await bot.send_message(user_id, 'Нет промокода',reply_markup=keyboard)
 
-        keyboard = types.InlineKeyboardMarkup(resize_keyboard=True)
-        for subject in subjects_buttons:
-            keyboard.row(types.InlineKeyboardButton(subject, callback_data=callbakes.new(action='subject_choise', value=subject)))
-        await bot.send_message(user_id, 'Выберите предмет.\n☝️Внимательно, перевыбрать возможности не будет😄:',reply_markup=keyboard)
-        await States.SUBJECT.set()
-        return
-        
-    promo_code = msg['text']
-    
-    items = promo_codes.find()
-    right_promo = False
-    for item in items:
-        if item['_id'] == promo_code:
-            if int(item['value']) == 0:
-                await bot.send_message(user_id, 'Данная акция закончилась')
-                return
-            else:
-                right_promo = True
-                await state.update_data(promo_code=[item['_id'],item['discounts'],item['value']])
-                
-                keyboard = types.ReplyKeyboardRemove()
-                await bot.send_message(user_id, 'Промокод применен, при первой покупке скидка автоматически применится',reply_markup=keyboard)
-                keyboard = types.InlineKeyboardMarkup(resize_keyboard=True)
-                for subject in subjects_buttons:
-                    keyboard.row(types.InlineKeyboardButton(subject, callback_data=callbakes.new(action='subject_choise', value=subject)))
-                await bot.send_message(user_id, 'Выберите предмет.\n☝️Внимательно, перевыбрать возможности не будет😄:',reply_markup=keyboard)
-                await States.SUBJECT.set()
-                
-    if right_promo == False:
-        await bot.send_message(user_id, 'Проверьте правильность написания')
-        return
-   
-    
-@dp.callback_query_handler(callbakes.filter(action='subject_choise'),state=States.SUBJECT)
-async def process_callback(query: types.CallbackQuery, callback_data: dict):             
-    state = dp.current_state(user=query.from_user.id)
-    user_id = str(query.from_user.id)
-     
-    subject = callback_data['value']
-    await state.update_data(subject=subject)
-    
+    else:
+        items = promo_codes.find()
+        right_promo = False
+        for item in items:
+            if item['_id'] == promo_code:
+                if int(item['value']) == 0:
+                    await bot.send_message(user_id, 'Данная акция закончилась')
+                    return
+                else:
+                    right_promo = True
+                    promo_code = [item['_id'],item['discounts'],item['value']]
+                    await state.update_data(promo_code=[item['_id'],item['discounts'],item['value']])
+                    keyboard = types.ReplyKeyboardRemove()
+                    await bot.send_message(user_id, 'Промокод применен, при первой покупке скидка автоматически применится',reply_markup=keyboard)
+                    
+        if right_promo == False:
+            await bot.send_message(user_id, 'Проверьте правильность написания')
+            return
+
+    # if data.get('is_just_registration') == None:
     keyboard = types.InlineKeyboardMarkup(resize_keyboard=True)
     for grade in ['5 класс', '6 класс', '7 класс', '8 класс', '9 класс', '10 класс', '11 класс']:
         keyboard.row(types.InlineKeyboardButton(grade, callback_data=callbakes.new(action='grade_choise', value=grade)))
-    await bot.edit_message_text('Осталось пара шагов. Укажите класс:', query.from_user.id, query.message.message_id, reply_markup=keyboard)
+    await bot.send_message(user_id, 'Укажите класс:',reply_markup=keyboard)
     await States.GRADE.set()
+
+    # else:
+       
+
+
+
+
+
+
+   
+    
+@dp.callback_query_handler(callbakes.filter(action='grade_choise'),state=States.GRADE)
+async def process_callback(query: types.CallbackQuery, callback_data: dict):             
+    state = dp.current_state(user=query.from_user.id)
+    user_id = str(query.from_user.id)
+    data = await state.get_data()
+    grade = callback_data['value']
+
+    if data.get('is_just_registration') == None:
+        subjects_buttons = data['subjects_buttons']
+        await state.update_data(grade=grade)
+        keyboard = types.InlineKeyboardMarkup(resize_keyboard=True)
+        for subject in subjects_buttons:
+            keyboard.row(types.InlineKeyboardButton(subject, callback_data=callbakes.new(action='subject_choise', value=subject)))
+        await bot.edit_message_text('Осталось пара шагов. Выберите предмет.\n☝️Внимательно, перевыбрать возможности не будет😄:', query.from_user.id, query.message.message_id, reply_markup=keyboard)
+        await States.SUBJECT.set()
+    else:
+        promo_code = data['promo_code']
+        students_full_name = data['students_full_name']
+        parents_full_name = data['parents_full_name']
+        if parents_full_name == None: full_name = students_full_name
+        else: full_name =  parents_full_name 
+        number = data['number']
+
+        if query.from_user.username != None:
+            username = '@'+str(query.from_user.username) 
+        else: username = None
+
+        if parents_full_name == None:
+            data = json.dumps({'labels': [categories[grade]], 'comment':f'Ученик: {students_full_name}'})
+        else:
+            data = json.dumps({'labels': [categories[grade]], 'comment':f'Ученик: {students_full_name}'+f'\nРодитель: {parents_full_name}'})
+
+        try:
+            uri = "https://api.yclients.com/api/v1/clients/651183/"
+            headers = {"Accept" : "application/vnd.yclients.v2+json","Content-Type" : "application/json","Authorization" : "Bearer uw2xhhghwja3kbkmadh4, User f774e3eb777a5244ccbe927cf8c6047f"}
+            data = json.dumps({
+                'name': full_name,
+                'phone': number,
+                'discount': 0,
+                'comment':f'Ученик: {students_full_name}'+f'\nРодитель: {parents_full_name}',
+                'labels': [categories[grade]],
+            })
+            client_id = json.loads(requests.post(uri, headers=headers, data=data).text)['data']['id']
+        except:
+            keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
+            buttons = ["/start"]
+            keyboard.add(*buttons)
+            await bot.send_message(user_id, 'Такой номер уже есть в школе, обратитесь к администратору',reply_markup=keyboard)
+            await state.finish()
+            return
+
+        if promo_code != None:
+            if promo_code[1].split(' ')[0].split('/')[1] != '0' or promo_code[1].split(' ')[1].split('/')[1] != '0':
+                abonement_id = '23250729'
+                uri = "https://api.yclients.com/api/v1/storage_operations/operation/651183/"
+                headers = {"Accept" : "application/vnd.yclients.v2+json","Content-Type" : "application/json","Authorization" : "Bearer uw2xhhghwja3kbkmadh4, User f774e3eb777a5244ccbe927cf8c6047f"}
+                data = json.dumps({
+                    'type_id' : 1,
+                    'create_date' : str(datetime.today().day)+'.'+str(datetime.today().month)+'.'+str(datetime.today().year),
+                    'storage_id': 1298829,
+                    'master_id' : 1858699,
+                    'client_id': client_id,
+                    'goods_transactions' : [{
+                        'amount': 1,
+                        'client_id': client_id,
+                        'cost_per_unit': 10000,
+                        'discount' : 100,
+                        'cost' : 1000,
+                        'master_id' : 1858699,
+                        'operation_unit_type': 1,
+                        'good_id': abonement_id,
+                        'good_special_number': str(random.randint(1000000000,9999999999))}]}
+                )
+                response = json.loads(requests.post(uri, headers=headers, data=data).text)
+
+            base_students.update_one({"_id": number}, 
+                                            {"$set": {'one_time_discounts': promo_code[1].split(' ')[0].split('/')[0]+' '+promo_code[1].split(' ')[1].split('/')[0]}})
+            promo_codes.update_one({"_id": promo_code[0]}, 
+                                            {"$set": {'value': int(promo_code[2])-1}})
+
+        for administrators_id in administators_ids:
+            await bot.send_message(administrators_id, f'Пользователь (ФИО опекуна: {parents_full_name}, ФИО ученика: {students_full_name}) c номером {number} и username {username} закончил просто регистрацию')
+        # except: None
+        # keyboard = types.InlineKeyboardMarkup(resize_keyboard=True, row_width=4)
+        # keyboard.row(types.InlineKeyboardButton('Назад', callback_data=callbakes.new(action='time_choise', value='Назад')))
+        keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
+        buttons = ["Следующий урок", "Купить"]
+        buttons_2 = ["Баланс", "Контакты", "Остановить уведомления"]
+        keyboard.add(*buttons)
+        keyboard.row(*buttons_2)
+
+        await bot.edit_message_text('Вы зарегистрированы',query.from_user.id, query.message.message_id)
+        await bot.send_photo(user_id, photo=open('image3.png',"rb"),caption=blanks['welcome'], reply_markup=keyboard)
+        await state.finish()
+        
     
 
-@dp.callback_query_handler(callbakes.filter(action='grade_choise'),state=States.GRADE)
+@dp.callback_query_handler(callbakes.filter(action='subject_choise'),state=States.SUBJECT)
 async def process_callback(query: types.CallbackQuery, callback_data: dict):     
     state = dp.current_state(user=query.from_user.id)
     user_id = str(query.from_user.id)
     #get data
-    grade = callback_data['value']
-    await state.update_data(grade=grade)
+    subject = callback_data['value']
+    await state.update_data(subject=subject)
+
     data = await state.get_data()
-   
+
     subject = data['subject']
-    number = data['number']
     timezone = int(data['timezone'])
     staff_id = subject_id[subject]['id_main_teacher']
     service_ids = [subject_id[subject]['id_subject']]
